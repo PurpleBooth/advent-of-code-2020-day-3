@@ -21,21 +21,31 @@ fn validator(inputs: &[String]) -> Result<i64, Box<dyn Error>> {
         .map(|input| parse(&input.to_string()))
         .collect::<Result<Vec<_>, Box<dyn Error>>>()?
         .into_iter()
-        .filter(|(min, max, character, password)| {
-            let count = password.matches(character).count();
-            min <= &(count) && count <= *max as usize
+        .filter(|(first_index, second_index, character, password)| {
+            match (
+                password.chars().nth(first_index - 1),
+                password.chars().nth(*second_index - 1),
+            ) {
+                (Some(first_char), Some(second_char)) => {
+                    (String::from(first_char) != *character
+                        && String::from(second_char) == *character)
+                        || (String::from(second_char) != *character
+                            && String::from(first_char) == *character)
+                }
+                _ => false,
+            }
         })
         .count() as i64)
 }
 
 fn parse(input: &str) -> Result<(usize, usize, String, String), Box<dyn Error>> {
     let mut reader = BufReader::new((input).as_bytes());
-    let mut min_bytes = vec![];
-    reader.read_until(b'-', &mut min_bytes)?;
-    min_bytes.pop();
-    let mut max_bytes = vec![];
-    reader.read_until(b' ', &mut max_bytes)?;
-    max_bytes.pop();
+    let mut first_index_bytes = vec![];
+    reader.read_until(b'-', &mut first_index_bytes)?;
+    first_index_bytes.pop();
+    let mut second_index_bytes = vec![];
+    reader.read_until(b' ', &mut second_index_bytes)?;
+    second_index_bytes.pop();
     let mut character_bytes = vec![];
     reader.read_until(b':', &mut character_bytes)?;
     character_bytes.pop();
@@ -44,13 +54,13 @@ fn parse(input: &str) -> Result<(usize, usize, String, String), Box<dyn Error>> 
     rest_bytes.remove(0);
 
     Ok((
-        String::from_utf8(min_bytes)
+        String::from_utf8(first_index_bytes)
             .map_err(|err| -> Box<dyn Error> { Box::from(err) })
             .and_then(|c| {
                 c.parse()
                     .map_err(|err| -> Box<dyn Error> { Box::from(err) })
             })?,
-        String::from_utf8(max_bytes)
+        String::from_utf8(second_index_bytes)
             .map_err(|err| -> Box<dyn Error> { Box::from(err) })
             .and_then(|c| {
                 c.parse()
@@ -90,6 +100,7 @@ mod tests {
                 "1-3 a: abcde".into(),
                 "1-3 b: cdefg".into(),
                 "2-9 c: ccccccccc".into(),
+                "1-2 c: cdef".into(),
             ])
             .unwrap()
         )
