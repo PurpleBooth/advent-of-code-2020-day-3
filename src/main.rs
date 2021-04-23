@@ -17,7 +17,14 @@ fn main() -> Result<(), Error> {
         inputs.push(line?)
     }
 
-    println!("{:?}", tobogan_run(&inputs));
+    println!(
+        "{:?}",
+        tobogan_run(&inputs, 1, 1)
+            * tobogan_run(&inputs, 1, 3)
+            * tobogan_run(&inputs, 1, 5)
+            * tobogan_run(&inputs, 1, 7)
+            * tobogan_run(&inputs, 2, 1)
+    );
 
     Ok(())
 }
@@ -27,18 +34,28 @@ struct Tobogan {
     y: usize,
     x: usize,
     width: usize,
+    down: usize,
+    right: usize,
 }
 
 impl Tobogan {
-    fn new(width: usize) -> Tobogan {
-        Tobogan { y: 0, x: 0, width }
+    fn new(width: usize, down: usize, right: usize) -> Tobogan {
+        Tobogan {
+            y: 0,
+            x: 0,
+            width,
+            down,
+            right,
+        }
     }
 
     fn slide(&self) -> Tobogan {
         Tobogan {
-            y: self.y + 1,
-            x: (self.x + 3) % self.width,
+            y: self.y + self.down,
+            x: (self.x + self.right) % self.width,
             width: self.width,
+            down: self.down,
+            right: self.right,
         }
     }
 
@@ -47,7 +64,7 @@ impl Tobogan {
     }
 }
 
-fn tobogan_run(map: &[String]) -> usize {
+fn tobogan_run(map: &[String], down: usize, right: usize) -> usize {
     let first_row = map.get(0);
     if first_row.is_none() {
         return 0;
@@ -59,7 +76,7 @@ fn tobogan_run(map: &[String]) -> usize {
         .flat_map(|row| row.chars())
         .enumerate()
         .fold(
-            (0, Tobogan::new(width)),
+            (0, Tobogan::new(width, down, right)),
             |(trees_hit, tobogan), (char_index, character)| match (
                 tobogan.index(),
                 char_index,
@@ -82,6 +99,8 @@ mod tests {
         assert_eq!(
             3,
             Tobogan {
+                down: 1,
+                right: 3,
                 y: 1,
                 x: 1,
                 width: 2,
@@ -96,6 +115,8 @@ mod tests {
             x: 0,
             y: 0,
             width: 8,
+            down: 1,
+            right: 3,
         }
         .slide();
         assert_eq!(
@@ -103,6 +124,8 @@ mod tests {
                 y: 1,
                 x: 3,
                 width: 8,
+                down: 1,
+                right: 3
             },
             tobogan
         );
@@ -113,6 +136,8 @@ mod tests {
                 y: 2,
                 x: 6,
                 width: 8,
+                down: 1,
+                right: 3
             },
             tobogan
         );
@@ -123,6 +148,8 @@ mod tests {
                 y: 3,
                 x: 1,
                 width: 8,
+                down: 1,
+                right: 3
             },
             tobogan
         );
@@ -131,41 +158,45 @@ mod tests {
 
     #[test]
     fn no_input_is_0() {
-        assert_eq!(0, tobogan_run(&[]))
+        assert_eq!(0, tobogan_run(&[], 1, 3))
     }
 
     #[test]
     fn single_tree() {
-        assert_eq!(1, tobogan_run(&["#".into()]))
+        assert_eq!(1, tobogan_run(&["#".into()], 1, 3))
     }
 
     #[test]
     fn open_field() {
-        assert_eq!(0, tobogan_run(&["....".into(), "....".into()]))
+        assert_eq!(0, tobogan_run(&["....".into(), "....".into()], 1, 3))
     }
 
     #[test]
     fn one_tree_hill() {
-        assert_eq!(1, tobogan_run(&["....".into(), "...#".into()]))
+        assert_eq!(1, tobogan_run(&["....".into(), "...#".into()], 1, 3))
     }
 
     #[test]
     fn given_example() {
         assert_eq!(
             7,
-            tobogan_run(&[
-                "..##.......".into(),
-                "#...#...#..".into(),
-                ".#....#..#.".into(),
-                "..#.#...#.#".into(),
-                ".#...##..#.".into(),
-                "..#.##.....".into(),
-                ".#.#.#....#".into(),
-                ".#........#".into(),
-                "#.##...#...".into(),
-                "#...##....#".into(),
-                ".#..#...#.#".into(),
-            ])
+            tobogan_run(
+                &[
+                    "..##.......".into(),
+                    "#...#...#..".into(),
+                    ".#....#..#.".into(),
+                    "..#.#...#.#".into(),
+                    ".#...##..#.".into(),
+                    "..#.##.....".into(),
+                    ".#.#.#....#".into(),
+                    ".#........#".into(),
+                    "#.##...#...".into(),
+                    "#...##....#".into(),
+                    ".#..#...#.#".into(),
+                ],
+                1,
+                3
+            )
         )
     }
 }
