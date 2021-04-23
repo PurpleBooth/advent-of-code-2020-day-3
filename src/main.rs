@@ -1,108 +1,171 @@
-use std::error::Error;
 use std::io;
-use std::io::{BufRead, BufReader, Read};
+use std::io::BufRead;
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+use thiserror::Error as ThisError;
+
+#[derive(ThisError, Debug)]
+pub enum Error {
+    #[error("data store disconnected")]
+    Disconnect(#[from] io::Error),
+}
+
+fn main() -> Result<(), Error> {
     let stdin = io::stdin();
     let mut inputs: Vec<_> = vec![];
 
     for line in stdin.lock().lines() {
-        inputs.push(line.map_err(Box::<dyn std::error::Error>::from)?)
+        inputs.push(line?)
     }
 
-    println!("{:?}", validator(&inputs));
+    println!("{:?}", tobogan_run(&inputs));
 
     Ok(())
 }
 
-fn validator(inputs: &[String]) -> Result<i64, Box<dyn Error>> {
-    Ok(inputs
-        .iter()
-        .map(|input| parse(&input.to_string()))
-        .collect::<Result<Vec<_>, Box<dyn Error>>>()?
-        .into_iter()
-        .filter(|(first_index, second_index, character, password)| {
-            match (
-                password.chars().nth(first_index - 1),
-                password.chars().nth(*second_index - 1),
-            ) {
-                (Some(first_char), Some(second_char)) => {
-                    (String::from(first_char) != *character
-                        && String::from(second_char) == *character)
-                        || (String::from(second_char) != *character
-                            && String::from(first_char) == *character)
-                }
-                _ => false,
-            }
-        })
-        .count() as i64)
+#[derive(Debug, Eq, PartialEq)]
+struct Tobogan {
+    y: usize,
+    x: usize,
+    width: usize,
 }
 
-fn parse(input: &str) -> Result<(usize, usize, String, String), Box<dyn Error>> {
-    let mut reader = BufReader::new((input).as_bytes());
-    let mut first_index_bytes = vec![];
-    reader.read_until(b'-', &mut first_index_bytes)?;
-    first_index_bytes.pop();
-    let mut second_index_bytes = vec![];
-    reader.read_until(b' ', &mut second_index_bytes)?;
-    second_index_bytes.pop();
-    let mut character_bytes = vec![];
-    reader.read_until(b':', &mut character_bytes)?;
-    character_bytes.pop();
-    let mut rest_bytes = vec![];
-    reader.read_to_end(&mut rest_bytes)?;
-    rest_bytes.remove(0);
+impl Tobogan {
+    fn new(width: usize) -> Tobogan {
+        Tobogan { y: 0, x: 0, width }
+    }
 
-    Ok((
-        String::from_utf8(first_index_bytes)
-            .map_err(|err| -> Box<dyn Error> { Box::from(err) })
-            .and_then(|c| {
-                c.parse()
-                    .map_err(|err| -> Box<dyn Error> { Box::from(err) })
-            })?,
-        String::from_utf8(second_index_bytes)
-            .map_err(|err| -> Box<dyn Error> { Box::from(err) })
-            .and_then(|c| {
-                c.parse()
-                    .map_err(|err| -> Box<dyn Error> { Box::from(err) })
-            })?,
-        String::from_utf8(character_bytes).map_err(|err| -> Box<dyn Error> { Box::from(err) })?,
-        String::from_utf8(rest_bytes).map_err(|err| -> Box<dyn Error> { Box::from(err) })?,
-    ))
+    fn slide(&self) -> Tobogan {
+        Tobogan {
+            y: self.y + 1,
+            x: (self.x + 3) % self.width,
+            width: self.width,
+        }
+    }
+
+    fn index(&self) -> usize {
+        ((self.y * self.width) + self.x) as usize
+    }
+}
+
+fn tobogan_run(map: &[String]) -> usize {
+    let first_row = map.get(0);
+    if first_row.is_none() {
+        return 0;
+    }
+
+    let width = first_row.unwrap().len();
+
+    map.iter()
+        .flat_map(|row| row.chars())
+        .enumerate()
+        .fold(
+            (0, Tobogan::new(width)),
+            |(trees_hit, tobogan), (char_index, character)| match (
+                tobogan.index(),
+                char_index,
+                character,
+            ) {
+                (index, char_index, '#') if char_index == index => (trees_hit + 1, tobogan.slide()),
+                (index, chat_index, '.') if chat_index == index => (trees_hit, tobogan.slide()),
+                (_, _, _) => (trees_hit, tobogan),
+            },
+        )
+        .0
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{parse, validator};
+    use crate::{tobogan_run, Tobogan};
 
     #[test]
-    fn test_parse() {
+    fn tobogan_index() {
         assert_eq!(
-            (1, 3, String::from("a"), String::from("abcde")),
-            parse("1-3 a: abcde").unwrap()
+            3,
+            Tobogan {
+                y: 1,
+                x: 1,
+                width: 2,
+            }
+            .index()
         );
+    }
+
+    #[test]
+    fn tobogan_slide() {
+        let mut tobogan = Tobogan {
+            x: 0,
+            y: 0,
+            width: 8,
+        }
+        .slide();
         assert_eq!(
-            (4, 7, String::from("v"), String::from("vvvvv")),
-            parse("4-7 v: vvvvv").unwrap()
-        )
+            Tobogan {
+                y: 1,
+                x: 3,
+                width: 8,
+            },
+            tobogan
+        );
+        assert_eq!(8 + 3, tobogan.index());
+        tobogan = tobogan.slide();
+        assert_eq!(
+            Tobogan {
+                y: 2,
+                x: 6,
+                width: 8,
+            },
+            tobogan
+        );
+        assert_eq!((2 * 8) + 6, tobogan.index());
+        tobogan = tobogan.slide();
+        assert_eq!(
+            Tobogan {
+                y: 3,
+                x: 1,
+                width: 8,
+            },
+            tobogan
+        );
+        assert_eq!((3 * 8) + 1, tobogan.index());
     }
 
     #[test]
     fn no_input_is_0() {
-        assert_eq!(0, validator(&[]).unwrap())
+        assert_eq!(0, tobogan_run(&[]))
     }
 
     #[test]
-    fn simple_examples() {
+    fn single_tree() {
+        assert_eq!(1, tobogan_run(&["#".into()]))
+    }
+
+    #[test]
+    fn open_field() {
+        assert_eq!(0, tobogan_run(&["....".into(), "....".into()]))
+    }
+
+    #[test]
+    fn one_tree_hill() {
+        assert_eq!(1, tobogan_run(&["....".into(), "...#".into()]))
+    }
+
+    #[test]
+    fn given_example() {
         assert_eq!(
-            2,
-            validator(&[
-                "1-3 a: abcde".into(),
-                "1-3 b: cdefg".into(),
-                "2-9 c: ccccccccc".into(),
-                "1-2 c: cdef".into(),
+            7,
+            tobogan_run(&[
+                "..##.......".into(),
+                "#...#...#..".into(),
+                ".#....#..#.".into(),
+                "..#.#...#.#".into(),
+                ".#...##..#.".into(),
+                "..#.##.....".into(),
+                ".#.#.#....#".into(),
+                ".#........#".into(),
+                "#.##...#...".into(),
+                "#...##....#".into(),
+                ".#..#...#.#".into(),
             ])
-            .unwrap()
         )
     }
 }
